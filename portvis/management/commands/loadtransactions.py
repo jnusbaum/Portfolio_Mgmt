@@ -117,7 +117,7 @@ class Command(BaseCommand):
                         factors = row[7].split(':')
                         sin = Decimal(factors[0])
                         sout = Decimal(factors[1])
-                        factor = sout/sin
+                        factor = sin/sout
                         a = s.action_set.create(tstamp=d, type=Action.ActionType.SPLIT, value=factor)
 
                     else:

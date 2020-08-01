@@ -2,6 +2,7 @@ from django.db import models
 from typing import List
 import datetime
 from decimal import *
+import logging
 
 END_TIME = datetime.datetime.max
 # transactions
@@ -42,6 +43,10 @@ class Action(models.Model):
 class Price(models.Model):
     security = models.ForeignKey('Security', on_delete=models.CASCADE)
     tstamp = models.DateField()
+    close = models.DecimalField(decimal_places=4, max_digits=16)
+
+    class Meta:
+        unique_together = ('security', 'tstamp')
 
 
 # securities
@@ -50,6 +55,7 @@ class Security(models.Model):
     name = models.TextField(default='')
 
     def position(self, asoft: datetime.date) -> Decimal:
+        logging.debug(f"position for {self.symbol}")
         position = Decimal(0)
         # position is calculated as requested
         tacts = self.transaction_set.filter(tstamp__lte=asoft).order_by('tstamp')
@@ -66,10 +72,16 @@ class Security(models.Model):
             except IndexError:
                 # apply all remaining actions
                 for i in range(y, len(acts)):
-                    if act.type == Action.ActionType.STOCK_DIVIDEND:
+                    if acts[i].type == Action.ActionType.STOCK_DIVIDEND:
+                        logging.debug(f"position before {position}")
+                        logging.debug(f"applying STOCK_DIVIDEND {acts[i].tstamp} with value {acts[i].value}")
                         position = position + acts[i].value
-                    elif act.type == Action.ActionType.SPLIT:
+                        logging.debug(f"position after {position}")
+                    elif acts[i].type == Action.ActionType.SPLIT:
+                        logging.debug(f"position before {position}")
+                        logging.debug(f"applying SPLIT {acts[i].tstamp} with value {acts[i].value}")
                         position = position * acts[i].value
+                        logging.debug(f"position after {position}")
                 break
             ttime = tact.tstamp
 
@@ -78,20 +90,34 @@ class Security(models.Model):
             except IndexError:
                 # apply all remaining trans
                 for i in range(x, len(tacts)):
-                    position = position + tacts[i].quantity
+                    if tacts[i].type == Transaction.TransactionType.TRADE:
+                        logging.debug(f"position before {position}")
+                        logging.debug(f"applying {tacts[i].type} {tacts[i].tstamp} with quantity {tacts[i].quantity}")
+                        position = position + tacts[i].quantity
+                        logging.debug(f"position after {position}")
                 break
             atime = act.tstamp
 
             if ttime <= atime:
                 # apply transaction
-                position = position + tact.quantity
+                if tact.type == Transaction.TransactionType.TRADE:
+                    logging.debug(f"position before {position}")
+                    logging.debug(f"applying {tact.type} {tact.tstamp} with quantity {tact.quantity}")
+                    position = position + tact.quantity
+                    logging.debug(f"position after {position}")
                 x += 1
             elif atime < ttime:
                 # apply action
                 if act.type == Action.ActionType.STOCK_DIVIDEND:
+                    logging.debug(f"position before {position}")
+                    logging.debug(f"applying STOCK_DIVIDEND {act.tstamp} with value {act.value}")
                     position = position + act.value
+                    logging.debug(f"position after {position}")
                 elif act.type == Action.ActionType.SPLIT:
+                    logging.debug(f"position before {position}")
+                    logging.debug(f"applying SPLIT {act.tstamp} with value {act.value}")
                     position = position * act.value
+                    logging.debug(f"position after {position}")
                 y += 1
 
         return position
@@ -101,6 +127,9 @@ class Security(models.Model):
         pass
 
     def actions(self, start: datetime.datetime, end: datetime.datetime) -> List[Action]:
+        pass
+
+    def prices(self, start: datetime.datetime, end: datetime.datetime) -> List[Price]:
         pass
 
 
